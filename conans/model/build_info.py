@@ -80,6 +80,7 @@ class _Component:
 
         self._sysroot = None
         self._requires = None
+        self._requires_private = None
 
         # LEGACY 1.X fields, can be removed in 2.X
         self.names = MockInfoProperty("cpp_info.names")
@@ -111,6 +112,7 @@ class _Component:
             "objects": self._objects,
             "sysroot": self._sysroot,
             "requires": self._requires,
+            "requires_private": self._requires_private,
             "properties": self._properties
         }
 
@@ -339,6 +341,16 @@ class _Component:
         self._requires = value
 
     @property
+    def requires_private(self):
+        if self._requires_private is None:
+            self._requires_private = []
+        return self._requires_private
+
+    @requires_private.setter
+    def requires_private(self, value):
+        self._requires_private = value
+
+    @property
     def required_component_names(self):
         """ Names of the required INTERNAL components of the same package (not scoped with ::)"""
         if self.requires is None:
@@ -390,6 +402,10 @@ class _Component:
         if other.requires:
             current_values = self.get_init("requires", [])
             merge_list(other.requires, current_values)
+
+        if other.requires_private:
+            current_values = self.get_init("requires_private", [])
+            merge_list(other.requires_private, current_values)
 
         if other._properties:
             current_values = self.get_init("_properties", {})
@@ -557,10 +573,11 @@ class CppInfo:
             return
         # Accumulate all external requires
         comps = self.required_components
+        comps_private = self.required_private_components
         missing_internal = [c[1] for c in comps if c[0] is None and c[1] not in self.components]
         if missing_internal:
             raise ConanException(f"{conanfile}: Internal components not found: {missing_internal}")
-        external = [c[0] for c in comps if c[0] is not None]
+        external = [c[0] for c in (comps + comps_private) if c[0] is not None]
         if not external:
             return
         # Only direct host (not test) dependencies can define required components
@@ -593,3 +610,18 @@ class CppInfo:
         # Then split the names
         ret = [r.split("::") if "::" in r else (None, r) for r in ret]
         return ret
+
+    @property
+    def required_private_components(self):
+        """Returns a list of tuples with (require, component_name) required by the package
+        If the require is internal (to another component), the require will be None"""
+        # FIXME: Cache the value
+        # First aggregate without repetition, respecting the order
+        ret_private = [r for r in self._package.requires_private]
+        for comp in self.components.values():
+            for r in comp.requires_private:
+                if r not in ret_private:
+                    ret_private.append(r)
+        # Then split the names
+        ret_private = [r.split("::") if "::" in r else (None, r) for r in ret_private]
+        return ret_private
