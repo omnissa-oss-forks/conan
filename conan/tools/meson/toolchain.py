@@ -14,6 +14,7 @@ from conan.tools.env import VirtualBuildEnv
 from conan.tools.meson.helpers import *
 from conan.tools.microsoft import VCVars, msvc_runtime_flag
 from conans.util.files import save
+from conan.tools.build.wrapcc import generate_wrapcc
 
 
 class MesonToolchain(object):
@@ -153,6 +154,7 @@ class MesonToolchain(object):
                        (see also https://mesonbuild.com/Cross-compilation.html#mixing-host-and-build-targets).
         """
         raise_on_universal_arch(conanfile)
+
         self._conanfile = conanfile
         self._native = native
         self._is_apple_system = is_apple_os(self._conanfile)
@@ -261,6 +263,8 @@ class MesonToolchain(object):
             default_comp = "cl"
             default_comp_cpp = "cl"
 
+        # Maybe generate wrappers for compiler_executables
+        _gcc_use_wrapper(conanfile, is_cross_building, native)
         # Read configuration for compilers
         compilers_by_conf = self._conanfile_conf.get("tools.build:compiler_executables", default={},
                                                      check_type=dict)
@@ -552,3 +556,38 @@ class MesonToolchain(object):
         save(self._filename, self._content)
         # FIXME: Should we check the OS and compiler to call VCVars?
         VCVars(self._conanfile).generate()
+
+
+def _gcc_use_wrapper(conanfile, is_cross_building, native):
+    if conanfile.settings.compiler == "gcc":
+        if is_cross_building and native:
+            build_env = VirtualBuildEnv(conanfile, auto_generate=True).vars()
+            cc = build_env.get("CC_FOR_BUILD")
+            cxx = build_env.get("CPP_FOR_BUILD")
+            c_flags = MesonToolchain._get_env_list(build_env.get("CFLAGS_FOR_BUILD", []))
+            cxx_flags = MesonToolchain._get_env_list(build_env.get("CPPFLAGS_FOR_BUILD", []))
+            wrap_cc_name = "wrap_cc_for_build"
+            wrap_cxx_name = "wrap_cxx_for_build"
+        else:
+            compiler_executables = conanfile.conf.get("tools.build:compiler_executables", check_type=dict)
+            cc = compiler_executables["c"]
+            cxx = compiler_executables["cpp"]
+            c_flags = conanfile.conf.get("tools.build:cflags", check_type=list)
+            cxx_flags = conanfile.conf.get("tools.build:cxxflags", check_type=list)
+            wrap_cc_name = "wrap_cc"
+            wrap_cxx_name = "wrap_cxx"
+
+        conf = conanfile.conf_build if native else conanfile.conf
+        (wrap_cc, c_remaining_flags) = generate_wrapcc(conanfile, wrap_cc_name, cc, c_flags)
+        if wrap_cc:
+            conf.update("tools.build:compiler_executables", {
+                "c": wrap_cc,
+            })
+            conf.define("tools.build:cflags", c_remaining_flags)
+
+        (wrap_cxx, cxx_remaining_flags) = generate_wrapcc(conanfile, wrap_cxx_name, cxx, cxx_flags)
+        if wrap_cxx:
+            conf.update("tools.build:compiler_executables", {
+                "cpp": wrap_cxx,
+            })
+            conf.define("tools.build:cxxflags", cxx_remaining_flags)
