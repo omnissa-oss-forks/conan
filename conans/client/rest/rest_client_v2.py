@@ -17,7 +17,7 @@ from conan.internal.errors import AuthenticationException, ForbiddenException, N
     RecipeNotFoundException, PackageNotFoundException, EXCEPTION_CODE_MAPPING
 from conan.errors import ConanException
 from conans.model.package_ref import PkgReference
-from conan.internal.paths import EXPORT_SOURCES_TGZ_NAME
+from conan.internal.paths import EXPORT_SOURCES_TGZ_NAME, PACKAGE_TGZ_NAME, PACKAGE_TZSTD_NAME
 from conans.model.recipe_ref import RecipeReference
 from conans.util.dates import from_iso8601_to_timestamp
 from conans.util.thread import ExceptionThread
@@ -260,8 +260,12 @@ class RestV2Methods:
         result = {}
         # Download only known files, but not metadata (except sign)
         if not only_metadata:  # Retrieve package first, then metadata
-            accepted_files = ["conaninfo.txt", "conan_package.tgz", "conanmanifest.txt",
-                              "metadata/sign"]
+            accepted_package_files = [PACKAGE_TZSTD_NAME, PACKAGE_TGZ_NAME]
+            accepted_files = ["conaninfo.txt", "conanmanifest.txt", "metadata/sign"]
+            for f in accepted_package_files:
+                if f in server_files:
+                    accepted_files = [f] + accepted_files
+                    break
             files = [f for f in server_files if any(f.startswith(m) for m in accepted_files)]
             # If we didn't indicated reference, server got the latest, use absolute now, it's safer
             urls = {fn: self.router.package_file(pref, fn) for fn in files}
