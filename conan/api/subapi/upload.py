@@ -123,7 +123,7 @@ class UploadAPI:
             is_summary = file.endswith(".json")
             file_kind = "summary" if is_summary else "file"
             try:
-                if is_summary or not uploader.exists(full_url, auth=None):
+                if not uploader.exists(full_url, auth=None):
                     output.info(f"Uploading {file_kind} '{basename}' to backup sources server")
                     uploader.upload(full_url, file, dedup=False, auth=None)
                 else:
