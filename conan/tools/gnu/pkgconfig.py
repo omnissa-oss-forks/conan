@@ -1,6 +1,7 @@
 import textwrap
 from io import StringIO
 
+from conan.tools.apple.apple import is_apple_os
 from conan.tools.build import cmd_args_to_string
 from conan.tools.env import Environment
 from conan.errors import ConanException
@@ -8,7 +9,7 @@ from conan.errors import ConanException
 
 class PkgConfig:
 
-    def __init__(self, conanfile, library, pkg_config_path=None, prefix=None):
+    def __init__(self, conanfile, library, pkg_config_path=None, prefix=None, no_recursive=False):
         """
 
         :param conanfile: The current recipe object. Always use ``self``.
@@ -22,10 +23,13 @@ class PkgConfig:
         self._pkg_config_path = pkg_config_path
         self._prefix = prefix
         self._variables = None
+        self._no_recursive = no_recursive
 
     def _parse_output(self, option):
         executable = self._conanfile.conf.get("tools.gnu:pkg_config", default="pkg-config")
         command = [executable, '--' + option, self._library, '--print-errors']
+        if self._no_recursive:
+            command += ["--maximum-traverse-depth=1"]
         if self._prefix:
             command += ["--define-variable=prefix=%s" % self._prefix]
         command = cmd_args_to_string(command)
@@ -121,27 +125,42 @@ class PkgConfig:
             cpp_info.libs = [lib for lib in self.libs if lib not in system_libs]
             cpp_info.system_libs = [lib for lib in self.libs if lib in system_libs]
         cpp_info.libdirs = self.libdirs
-        cpp_info.sharedlinkflags = self.linkflags
-        cpp_info.exelinkflags = self.linkflags
+        if is_apple_os(self._conanfile):
+            linkflags = []
+            frameworks = []
+            is_framework = False
+            for linkflag in self.linkflags:
+                if is_framework:
+                    frameworks.append(linkflag)
+                    is_framework = False
+                elif '-framework' == linkflag.strip():
+                    is_framework = True
+                else:
+                    linkflags.append(linkflag)
+            cpp_info.sharedlinkflags = linkflags
+            cpp_info.exelinkflags = linkflags
+            cpp_info.frameworks = frameworks
+        else:
+            cpp_info.sharedlinkflags = self.linkflags
+            cpp_info.exelinkflags = self.linkflags
         cpp_info.defines = self.defines
         cpp_info.includedirs = self.includedirs
         cpp_info.cflags = self.cflags
         cpp_info.cxxflags = self.cflags
 
-        requires = list(set(self.requires + self.requires_private))
-
-        # From the list of Requires in the .pc file, map them to conan dependencies
-        # and their components
+        # The order of requires and requires_private make sense for linker
+        # on Linux, so we need to keep it in cpp_info
+        pc_conan_map = {}
         for dependency in self._conanfile.dependencies.host.values():
-            if dependency.cpp_info.get_property("pkg_config_name") in requires:
-                cpp_info.requires += ["%s::%s" % (dependency.ref.name, dependency.ref.name)]
-                requires.remove(dependency.cpp_info.get_property("pkg_config_name"))
+            pkg_config_name = dependency.cpp_info.get_property("pkg_config_name")
+            pc_conan_map[pkg_config_name] = "%s::%s" % (dependency.ref.name, dependency.ref.name)
 
             for component_name, component in dependency.cpp_info.components.items():
-                if component.get_property("pkg_config_name") in requires:
-                    cpp_info.requires += ["%s::%s" % (dependency.ref.name, component_name)]
-                    requires.remove(component.get_property("pkg_config_name"))
+                component_pkg_config_name = component.get_property("pkg_config_name")
+                pc_conan_map[component_pkg_config_name] = "%s::%s" % (dependency.ref.name, component_name)
 
-        # Any remaining requires are assumed to be internal, conan will later verify
-        # the content of requires so we will know if something was missing.
-        cpp_info.requires += requires
+        for dst, src in [(cpp_info.requires, self.requires), (cpp_info.requires_private, self.requires_private)]:
+            for require in src:
+                # From the list of Requires in the .pc file, map them to conan dependencies
+                # and their components
+                dst.append(pc_conan_map.get(require, require))
