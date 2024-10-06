@@ -11,6 +11,7 @@ from conan.tools.build.flags import architecture_flag, architecture_link_flag, b
 from conan.tools.env import Environment, VirtualBuildEnv
 from conan.tools.gnu.get_gnu_triplet import _get_gnu_triplet
 from conan.tools.microsoft import VCVars, msvc_runtime_flag, unix_path, check_min_vs, is_msvc
+from conan.tools.gnu.windres_wrapper import _generate_windres_wrapper
 from conan.internal.model.pkg_type import PackageType
 
 
@@ -66,6 +67,15 @@ class AutotoolsToolchain:
         if self._is_universal_arch and not is_apple_os(self._conanfile):
             arch_str = conanfile.settings.get_safe('arch')
             raise ConanException(f"Universal arch '{arch_str}' is only supported in Apple OSes")
+
+        # Check if we need a windres wrapper for rc
+        compilers_by_conf = self._conanfile.conf.get("tools.build:compiler_executables", default={}, check_type=dict)
+        if "rc" in compilers_by_conf:
+            self._windres_rc = os.path.join(self._conanfile.generators_folder, 'windres-rc')
+            self._windres_orig_rc = compilers_by_conf["rc"]
+        else:
+            self._windres_rc = None
+            self._windres_orig_rc = None
 
         # Cross build triplets
         self._host = self._conanfile.conf.get("tools.gnu:host_triplet")
@@ -302,6 +312,7 @@ class AutotoolsToolchain:
         env.append("CFLAGS", self.cflags)
         env.append("LDFLAGS", self.ldflags)
         env.prepend_path("PKG_CONFIG_PATH", self._conanfile.generators_folder)
+
         # Objective C/C++
         self._include_obj_arc_flags(env)
         # Issue related: https://github.com/conan-io/conan/issues/15486
@@ -314,6 +325,11 @@ class AutotoolsToolchain:
                 env.define("CC_FOR_BUILD", compilers_build_mapping["c"])
             if "cpp" in compilers_build_mapping:
                 env.define("CXX_FOR_BUILD", compilers_build_mapping["cpp"])
+
+        if self._windres_rc:
+            env.define_path("RC", unix_path(self._conanfile, self._windres_rc))
+            env.define_path("WINDRES", unix_path(self._conanfile, self._windres_rc))
+
         return env
 
     def vars(self):
@@ -326,6 +342,8 @@ class AutotoolsToolchain:
         env.save_script("conanautotoolstoolchain")
         self.generate_args()
         VCVars(self._conanfile).generate(scope=scope)
+        if self._windres_rc:
+            _generate_windres_wrapper(self._windres_rc, unix_path(self._conanfile, self._windres_orig_rc))
 
     def _default_configure_shared_flags(self):
         args = []
