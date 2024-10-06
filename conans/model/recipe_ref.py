@@ -178,9 +178,12 @@ class RecipeReference:
             pattern = pattern.replace("@#", "#")
             no_user_channel = True
 
-        condition = ((pattern == "&" and is_consumer) or
-                     fnmatch.fnmatchcase(str(self), pattern) or
-                     fnmatch.fnmatchcase(self.repr_notime(), pattern))
+        condition = any(
+            ((p == "&" and is_consumer) or
+              fnmatch.fnmatchcase(str(self), p) or
+              fnmatch.fnmatchcase(self.repr_notime(), p))
+            for p in pattern.split('|')
+        )
         if no_user_channel:
             condition = condition and not self.user and not self.channel
         if negate:
