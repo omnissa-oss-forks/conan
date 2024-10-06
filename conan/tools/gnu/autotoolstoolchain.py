@@ -13,6 +13,7 @@ from conan.tools.gnu.get_gnu_triplet import _get_gnu_triplet
 from conan.tools.microsoft import VCVars, msvc_runtime_flag, unix_path, check_min_vs, is_msvc
 from conan.tools.gnu.windres_wrapper import _generate_windres_wrapper
 from conan.internal.model.pkg_type import PackageType
+from conan.tools.env import VirtualBuildEnv
 
 
 class AutotoolsToolchain:
@@ -84,6 +85,12 @@ class AutotoolsToolchain:
 
         self.android_cross_flags = {}
         self._is_cross_building = not self._is_universal_arch and cross_building(self._conanfile)
+        self.cc_for_build = None
+        self.cflags_for_build = []
+        self.cxx_for_build = None
+        self.cxxflags_for_build = []
+        self.ldflags_for_build = []
+
         if self._is_cross_building:
             compiler = self._conanfile.settings.get_safe("compiler")
             # If cross-building and tools.android:ndk_path is defined, let's try to guess the Android
@@ -99,6 +106,15 @@ class AutotoolsToolchain:
                 os_build = conanfile.settings_build.get_safe('os')
                 arch_build = conanfile.settings_build.get_safe('arch')
                 self._build = _get_gnu_triplet(os_build, arch_build, compiler=compiler)["triplet"]
+
+            build_env = VirtualBuildEnv(self._conanfile, auto_generate=True).vars()
+            self.cc_for_build = build_env.get("CC_FOR_BUILD")
+            self.cflags_for_build = self._get_env_list(build_env.get("CFLAGS_FOR_BUILD", []))
+
+            self.cxx_for_build = build_env.get("CXX_FOR_BUILD")
+            self.cxxflags_for_build = self._get_env_list(build_env.get("CXXFLAGS_FOR_BUILD", []))
+
+            self.ldflags_for_build = self._get_env_list(build_env.get("LDFLAGS_FOR_BUILD", []))
 
         sysroot = self._conanfile.conf.get("tools.build:sysroot")
         if sysroot:
@@ -193,6 +209,11 @@ class AutotoolsToolchain:
             if build_env.get(var_name) is None:
                 ret[var_name] = var_path
         return ret
+
+    @staticmethod
+    def _get_env_list(v):
+        # FIXME: Should Environment have the "check_type=None" keyword as Conf?
+        return v.strip().split() if not isinstance(v, list) else v
 
     def _get_msvc_runtime_flag(self):
         if llvm_clang_front(self._conanfile) == "clang":
@@ -336,6 +357,17 @@ class AutotoolsToolchain:
         if self._windres_rc:
             env.define_path("RC", unix_path(self._conanfile, self._windres_rc))
             env.define_path("WINDRES", unix_path(self._conanfile, self._windres_rc))
+
+        if self.cc_for_build:
+            env.define("CC_FOR_BUILD", self.cc_for_build)
+            env.define("CFLAGS_FOR_BUILD", self.cflags_for_build)
+
+        if self.cxx_for_build:
+            env.define("CXX_FOR_BUILD", self.cxx_for_build)
+            env.define("CXXFLAGS_FOR_BUILD", self.cxxflags_for_build)
+
+        if self.ldflags_for_build:
+            env.define("LDFLAGS_FOR_BUILD", self.ldflags_for_build)
 
         return env
 
