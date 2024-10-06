@@ -21,15 +21,19 @@ class PkgConfigCache:
     def _cache_file_path(self):
         return os.path.join(self._conanfile.package_folder, "res", "pkg_config_cache.yml")
 
-    def add_file(self, path, use_mod_version=False):
-        cpp_info = CppInfo()
+    def add_file(self, path, use_mod_version=False, system_libs=None):
+        # This CppInfo will be filled into conanfile.cpp_info.components,
+        # so it should be created with set_defaults as True, same as
+        # conans.model.layout.Infos
+        cpp_info = CppInfo(set_defaults=True)
         pkg_config = PkgConfig(self._conanfile, path,
                                pkg_config_path=[
                                   self._conanfile.generators_folder, # To find PkgConfigDeps generated .pc files for our dependencies
                                   os.path.dirname(path), # To find any other .pc files from this package
                                ],
-                               prefix=self._conan_prefix)
-        pkg_config.fill_cpp_info(cpp_info)
+                               prefix=self._conan_prefix,
+                               no_recursive=True)
+        pkg_config.fill_cpp_info(cpp_info, is_system=False, system_libs=system_libs)
 
         filename = os.path.basename(path)[:-3]
         cpp_info.set_property("pkg_config_name",  filename)
@@ -59,10 +63,10 @@ class PkgConfigCache:
 
         self._components[filename] = cpp_info.serialize()
 
-    def add_folder(self, path, use_mod_version=False):
+    def add_folder(self, path, use_mod_version=False, system_libs=None):
         found = False
         for fn in glob.glob(os.path.join(path, "*.pc")):
-            self.add_file(fn)
+            self.add_file(fn, system_libs=system_libs)
             found = True
         if not found:
             raise ConanException("PkgConfigCache error, no .pc files found in '{}'".format(path))
