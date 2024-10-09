@@ -8,7 +8,7 @@ from conans.client.graph.graph import DepsGraph, Node, CONTEXT_HOST, \
     CONTEXT_BUILD, TransitiveRequirement, RECIPE_VIRTUAL, RECIPE_EDITABLE
 from conans.client.graph.graph import RECIPE_PLATFORM
 from conans.client.graph.graph_error import GraphLoopError, GraphConflictError, GraphMissingError, \
-    GraphRuntimeError, GraphError
+    GraphRuntimeError, GraphError, GraphOptionsConflictError
 from conans.client.graph.profile_node_definer import initialize_conanfile_profile
 from conans.client.graph.provides import check_graph_provides
 from conans.errors import ConanException
@@ -64,6 +64,8 @@ class DepsGraphBuilder(object):
             check_graph_provides(dep_graph)
         except GraphError as e:
             dep_graph.error = e
+        if not dep_graph.error and dep_graph.options_conflicts:
+            dep_graph.error = GraphOptionsConflictError(dep_graph.options_conflicts)
         dep_graph.resolved_ranges = self._resolver.resolved_ranges
         return dep_graph
 

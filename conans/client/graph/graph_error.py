@@ -36,6 +36,26 @@ class GraphConflictError(GraphError):
                f"and open 'graph.html' to inspect the conflict graphically."
 
 
+class GraphOptionsConflictError(GraphError):
+
+    def __init__(self, options_conflicts):
+        self.options_conflicts = options_conflicts
+
+    def serialize(self):
+        return {"type": "options_conflict",
+                "conflicts:": self.options_conflicts}
+
+    def __str__(self):
+        msg = "Options conflicts:\n"
+        for ref, ref_conflicts in self.options_conflicts.items():
+            for option, conflict_info in ref_conflicts.items():
+                prev_value = conflict_info['value']
+                msg += f"    {ref}:{option}={prev_value} (current value)\n"
+                for src_ref, conflict_value in conflict_info["conflicts"]:
+                    msg += f"        {src_ref}->{option}={conflict_value}\n"
+        return msg
+
+
 class GraphLoopError(GraphError):
 
     def __init__(self, node, require, ancestor):
