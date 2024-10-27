@@ -333,7 +333,7 @@ def tar_zst_compress(tar_path, files, compresslevel=None):
                     # Flush the current frame if it has reached a large enough size.
                     # There is no required size, but 128MB is a good starting point
                     # because it allows for faster random access to the file.
-                    current_frame_bytes += os.path.getsize(abs_path)
+                    current_frame_bytes += os.lstat(abs_path).st_size
                     if current_frame_bytes >= 134217728:
                         stream_writer.flush(zstandard.FLUSH_FRAME)
                         current_frame_bytes = 0
