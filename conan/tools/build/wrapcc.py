@@ -53,7 +53,7 @@ def generate_wrapcc(conanfile, wrap_cc_filename, cc, cflags):
     wrap_cc = os.path.abspath(wrap_cc_filename)
     save(wrap_cc, textwrap.dedent("""\
         #!/usr/bin/env bash
-        exec %s %s $@
+        exec %s %s "$@"
     """ % (cc, wrap_flags)))
     _chmod_plus_x(wrap_cc)
 
