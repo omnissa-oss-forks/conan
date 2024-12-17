@@ -279,6 +279,18 @@ class RemoteManager:
 
 def uncompress_file(src_path, dest_folder, scope=None):
     try:
+        from conans.util.runners import conan_run
+        ConanOutput(scope=scope).info(f"Decompressing {os.path.basename(src_path)}")
+        ConanOutput(scope=scope).info(f"bsdtar -C \"{dest_folder}\" -xf \"{src_path}\"")
+        mkdir(dest_folder)
+        retcode = conan_run(f"bsdtar -C \"{dest_folder}\" -xf \"{src_path}\"")
+        if retcode == 0:
+            ConanOutput().warning("bsdtar extract succeeded")
+            return
+    except:
+        pass
+    ConanOutput().warning("bsdtar extract failed, fallback to legacy")
+    try:
         filesize = os.path.getsize(src_path)
         big_file = filesize > 10000000  # 10 MB
         if big_file:
