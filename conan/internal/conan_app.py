@@ -54,7 +54,7 @@ class ConanBasicApp:
         localdb = LocalDB(cache_folder)
         auth_manager = ConanApiAuthManager(self.requester, cache_folder, localdb, global_conf)
         # Handle remote connections
-        self.remote_manager = RemoteManager(self.cache, auth_manager, cache_folder)
+        self.remote_manager = RemoteManager(self.cache, global_conf, auth_manager, cache_folder)
         global_editables = conan_api.local.editable_packages
         ws_editables = conan_api.workspace.editable_packages
         self.editable_packages = global_editables.update_copy(ws_editables)

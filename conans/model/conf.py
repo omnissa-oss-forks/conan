@@ -27,6 +27,7 @@ BUILT_IN_CONFS = {
     "core.download:retry": "Number of retries in case of failure when downloading from Conan server",
     "core.download:retry_wait": "Seconds to wait between download attempts from Conan server",
     "core.download:download_cache": "Define path to a file download cache",
+    "core.download:uncompress_command": "Command to run to uncompress downloaded archives, expects a format string using {src_path} and {dest_folder}",
     "core.cache:storage_path": "Absolute path where the packages and database are stored",
     # Sources backup
     "core.sources:download_cache": "Folder to store the sources backup",
