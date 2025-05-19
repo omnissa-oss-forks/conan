@@ -199,7 +199,8 @@ class _PCGenerator:
                 pkg_name = self._get_package_name(req_conanfile)
                 # Creating a component name with namespace, e.g., dep-comp1
                 comp_name = self._get_name_with_namespace(pkg_name, comp_ref_name)
-            ret.append(comp_name)
+            if comp_name not in ret:
+                ret.append(comp_name)
         return ret
 
     def _components_info(self):
