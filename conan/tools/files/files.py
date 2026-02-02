@@ -394,6 +394,9 @@ def unzip(conanfile, filename, destination=".", keep_permissions=False, pattern=
     import zipfile
     full_path = os.path.normpath(os.path.join(os.getcwd(), destination))
 
+    def is_symlink_zipinfo(zi):
+        return (zi.external_attr >> 28) == 0xA
+
     with FileProgress(filename, msg="Unzipping", mode="r") as file, zipfile.ZipFile(file) as z:
         zip_info = z.infolist()
         if pattern:
@@ -422,25 +425,33 @@ def unzip(conanfile, filename, destination=".", keep_permissions=False, pattern=
             output.info("Unzipping %s" % human_size(uncompress_size))
         extracted_size = 0
 
-        if platform.system() == "Windows":
-            for file_ in zip_info:
-                extracted_size += file_.file_size
-                try:
-                    z.extract(file_, full_path)
-                except Exception as e:
-                    output.error(f"Error extract {file_.filename}\n{str(e)}", error_type="exception")
-        else:  # duplicated for, to avoid a platform check for each zipped file
-            for file_ in zip_info:
-                extracted_size += file_.file_size
-                try:
+        keep_permissions = (keep_permissions and not platform.system() == "Windows")
+        for file_ in zip_info:
+            extracted_size += file_.file_size
+            try:
+                if not is_symlink_zipinfo(file_):
                     z.extract(file_, full_path)
                     if keep_permissions:
                         # Could be dangerous if the ZIP has been created in a non nix system
                         # https://bugs.python.org/issue15795
                         perm = file_.external_attr >> 16 & 0xFFF
                         os.chmod(os.path.join(full_path, file_.filename), perm)
-                except Exception as e:
-                    output.error(f"Error extract {file_.filename}\n{str(e)}", error_type="exception")
+                else:
+                    # Read extracted file contents to find target path to link to
+                    z.extract(file_, full_path)
+                    full_name = os.path.join(full_path, file_.filename)
+                    target = load(conanfile, full_name)
+                    os.unlink(full_name)
+                    try:
+                        # Try create a link to target path
+                        os.symlink(target, full_name)
+                    except OSError:
+                        # If we failed to create a symlink, just copy the file.
+                        if not os.path.isabs(target):
+                            target = os.path.join(full_path, target)
+                        shutil.copy2(target, full_name)
+            except Exception as e:
+                output.error(f"Error extract {file_.filename}\n{str(e)}", error_type="exception")
         output.writeln("")
 
 
