@@ -29,6 +29,9 @@ class _PCFilesDeps:
         {% if requires|length %}
         Requires: {{ requires|join(' ') }}
         {% endif %}
+        {% if requires_private|length %}
+        Requires.private: {{ requires_private|join(' ') }}
+        {% endif %}
     """)
 
     alias_template = textwrap.dedent("""\
@@ -38,12 +41,14 @@ class _PCFilesDeps:
         Requires: {{aliased}}
     """)
 
-    def __init__(self, pkgconfigdeps, dep, suffix=""):
+    # omnissa: pass through Requirement.transitive_libs from the requirement
+    def __init__(self, pkgconfigdeps, dep, suffix="", transitive_libs=False):
         self._conanfile = pkgconfigdeps._conanfile  # noqa
         self._properties = pkgconfigdeps._properties  # noqa
         self._transitive_reqs = get_transitive_requires(self._conanfile, dep)
         self._dep = dep
         self._suffix = suffix
+        self._transitive_libs = transitive_libs
 
     def _get_aliases(self, dep, pkg_name=None, comp_ref_name=None):
         def _get_dep_aliases():
@@ -169,7 +174,8 @@ class _PCFilesDeps:
         defines = ["-D%s" % var.replace('"', '\\"') for var in cpp_info.defines]
         return " ".join(includedirsflags + cxxflags + cflags + defines)
 
-    def _get_component_requirement_names(self, cpp_info):
+    # omnissa: support both requires and requires_private
+    def _get_component_requirement_names(self, cpp_info, private=False):
         """
         Get all the pkg-config valid names from the requirements ones given a CppInfo object.
 
@@ -191,7 +197,8 @@ class _PCFilesDeps:
         """
         dep_ref_name = self._dep.ref.name
         ret = []
-        for req in cpp_info.requires:
+        requires = cpp_info.requires_private if private else cpp_info.requires
+        for req in requires:
             pkg_ref_name, comp_ref_name = req.split("::") if "::" in req else (dep_ref_name, req)
             # For instance, dep == "hello/1.0" and req == "other::cmp1" -> hello != other
             if dep_ref_name != pkg_ref_name:
@@ -230,7 +237,13 @@ class _PCFilesDeps:
         # Loop through all the package's components
         for comp_ref_name, comp_cpp_info in self._dep.cpp_info.get_sorted_components().items():
             # At first, let's check if we have defined some components requires, e.g., "dep::cmp1"
-            comp_requires = self._get_component_requirement_names(comp_cpp_info)
+            # omnissa: support both requires and requires_private
+            comp_requires = self._get_component_requirement_names(comp_cpp_info, private=False)
+            comp_requires_private = self._get_component_requirement_names(comp_cpp_info, private=True)
+            # omnissa: when using transitive libs, include requires_private in requires
+            if self._transitive_libs:
+                comp_requires = comp_requires + comp_requires_private
+                comp_requires_private = []
             comp_name = self._get_name(self._dep, pkg_name, comp_ref_name)
             version = (self._get_property("component_version", self._dep, comp_ref_name) or
                        self._get_property("system_package_version", self._dep, comp_ref_name) or
@@ -242,6 +255,7 @@ class _PCFilesDeps:
                 "description": f"Conan component: {comp_name}",
                 "version": version,
                 "requires": comp_requires,
+                "requires_private": comp_requires_private,
                 "pc_variables": pc_variables,
                 "cflags": self._get_cflags([d for d in pc_variables if d.startswith("includedir")],
                                            comp_cpp_info),
@@ -264,12 +278,18 @@ class _PCFilesDeps:
             cpp_info = self._dep.cpp_info
             # At first, let's check if we have defined some global requires, e.g., "other::cmp1"
             # Note: If DEP has components, they'll be the requirements == pc_files.keys()
-            requires = list(pc_files.keys()) or self._get_component_requirement_names(cpp_info)
+            # omnissa: support both requires and requires_private
+            requires = list(pc_files.keys()) or self._get_component_requirement_names(cpp_info, private=False)
+            requires_private = self._get_component_requirement_names(cpp_info, private=True)
             # If we have found some component requirements it would be enough
             if not requires:
                 # If no requires were found, let's try to get all the direct visible dependencies,
                 # e.g., requires = "other_pkg/1.0"
                 requires = [self._get_name(req) for req in self._transitive_reqs.values()]
+            # omnissa: when using transitive libs, include requires_private in requires
+            if self._transitive_libs:
+                requires = requires + requires_private
+                requires_private = []
             version = (self._get_property("system_package_version", self._dep)
                        or self._dep.ref.version)
             custom_content = self._get_property("pkg_config_custom_content", self._dep)
@@ -279,6 +299,7 @@ class _PCFilesDeps:
                 "description": f"Conan package: {pkg_name}",
                 "version": version,
                 "requires": requires,
+                "requires_private": requires_private,
                 "pc_variables": pc_variables,
                 "cflags": self._get_cflags([d for d in pc_variables if d.startswith("includedir")],
                                            cpp_info),
@@ -381,7 +402,8 @@ class PkgConfigDeps:
         for require, dep in self._get_dependencies():
             suffix = self.build_context_suffix.get(require.ref.name, "") if require.build else ""
             # Save all the *.pc files and their contents
-            for name, content in _PCFilesDeps(self, dep, suffix=suffix).items():
+            # omnissa: pass through Requirement.transitive_libs from the requirement
+            for name, content in _PCFilesDeps(self, dep, suffix=suffix, transitive_libs=require.transitive_libs).items():
                 pc_name = _pc_file_name(name, is_build_context=require.build,
                                         has_suffix=bool(suffix))
                 save(pc_name, content)
