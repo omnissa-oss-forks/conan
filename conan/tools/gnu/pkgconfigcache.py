@@ -1,7 +1,7 @@
 from conan.errors import ConanException
 from conan.tools.files import mkdir, save, load, rmdir
 from conan.tools.gnu.pkgconfig import PkgConfig
-from conans.model.build_info import CppInfo
+from conan.internal.model.cpp_info import CppInfo
 
 from io import StringIO
 import glob

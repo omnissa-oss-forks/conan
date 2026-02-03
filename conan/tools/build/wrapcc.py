@@ -1,7 +1,7 @@
 import os
 import textwrap
 
-from conans.util.files import save
+from conan.tools.files import save
 from conan.tools.build import cmd_args_to_string
 
 def _chmod_plus_x(filename):

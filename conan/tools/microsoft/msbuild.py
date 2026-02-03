@@ -1,9 +1,6 @@
 from conan.errors import ConanException
-<<<<<<< HEAD
 from conan.tools.microsoft.visual import msvc_platform_from_arch
-=======
 from conan.tools.build import cmd_args_to_string
->>>>>>> 5b3a4a6d0 (Improve MSBuild to allow custom arguments.)
 
 
 def msbuild_verbosity_cmd_line_arg(conanfile):
