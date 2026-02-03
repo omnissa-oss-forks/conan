@@ -3,8 +3,12 @@ import gzip
 import os
 import shutil
 import sys
-import tarfile
 import time
+
+if sys.version_info >= (3, 14):
+    import tarfile
+else:
+    from backports.zstd import tarfile
 
 from conan.api.output import ConanOutput
 from conan.internal.source import retrieve_exports_sources
@@ -86,15 +90,7 @@ def get_compress_level(compressformat, global_conf):
                "Consumers using older Conan versions will not be able to install these packages. "
                "Feedback is welcome, please report any issues as GitHub tickets.")
         ConanOutput().warning(msg, warn_tag="experimental")
-    elif compressformat == "zst":
-        msg = ("The 'zst' compression is experimental. "
-               "Consumers installing packages created with this format must use Python >= 3.14. "
-               "Consumers using older Conan or Python versions will not be able to install these "
-               "packages. Feedback is welcome, please report any issues as GitHub tickets.")
-        ConanOutput().warning(msg, warn_tag="experimental")
 
-    if compressformat == "zst" and sys.version_info.minor < 14:
-        raise ConanException("The 'core.upload:compression_format=zst' is only for Python>=3.14")
     compresslevel = global_conf.get("core:compresslevel", check_type=int)
     if compresslevel is None and compressformat == "gz":
         compresslevel = global_conf.get("core.gzip:compresslevel", check_type=int)
@@ -188,12 +184,16 @@ class PackagePreparator:
         files.pop(CONANFILE)
         files.pop(CONAN_MANIFEST)
 
+        # Omnissa modification: continue to compress exports using gzip despite compressing
+        # packages using zstd. This allows us to support older Conan versions which don't
+        # support zstd compression for these files.
         if files:
-            comp = self._compressed_file(EXPORT_FILE_NAME, files, download_export_folder, ref)
+            comp = self._compressed_file(EXPORT_FILE_NAME, files, download_export_folder, ref,
+                                         compressformat="gz")
             result[comp] = os.path.join(download_export_folder, comp)
         if src_files:
             comp = self._compressed_file(EXPORT_SOURCES_FILE_NAME, src_files,
-                                         download_export_folder, ref)
+                                         download_export_folder, ref, compressformat="gz")
             result[comp] = os.path.join(download_export_folder, comp)
         return result
 
@@ -217,8 +217,14 @@ class PackagePreparator:
                 prev_bundle.setdefault("files", {}).update(files)
                 prev_bundle["upload"] = True
 
-    def _compressed_file(self, filename, files, download_folder, ref):
+    def _compressed_file(self, filename, files, download_folder, ref, compressformat=None):
         output = ConanOutput(scope=str(ref))
+
+        if compressformat:
+            compresslevel = get_compress_level(compressformat, self._global_conf)
+        else:
+            compressformat = self._compressformat
+            compresslevel = self._compresslevel
 
         # Check if there is some existing compressed file already
         matches = []
@@ -235,15 +241,17 @@ class PackagePreparator:
             raise ConanException(f"{ref}: Multiple package files found for {filename}: {matches}")
         if len(matches) == 1:
             existing = matches[0]
-            if not existing.endswith(self._compressformat):
+            if not existing.endswith(compressformat):
                 output.info(f"Existing {existing} compressed file, "
-                            f"keeping it, not using '{self._compressformat}' format")
+                            f"keeping it, not using '{compressformat}' format")
             return existing
 
-        file_name = filename + self._compressformat
+        # To support older Conan versions, legacy Omnissa "zstd" compression format needs to upload
+        # `package_info.tar.zst` instead of `package_info.tzst`.
+        file_name = filename + ("ar.zst" if compressformat == "zstd" else compressformat)
         package_file = os.path.join(download_folder, file_name)
         compressed_path = compress_files(files, file_name, download_folder,
-                                         compresslevel=self._compresslevel, scope=str(ref))
+                                         compresslevel=compresslevel, scope=str(ref))
         assert compressed_path == package_file
         assert os.path.exists(package_file)
         return file_name
@@ -343,7 +351,7 @@ def compress_files(files, name, dest_dir, compresslevel=None, scope=None, recurs
     out = ConanOutput(scope=scope)
     out.info(f"Compressing {name}")
 
-    if name.endswith("zst"):
+    if name.endswith(("zst", "zstd")):
         with tarfile.open(tgz_path, "w:zst", level=compresslevel) as tar:  # noqa Py314 only
             for filename, abs_path in sorted(files.items()):
                 tar.add(abs_path, filename, recursive=recursive)
