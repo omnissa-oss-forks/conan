@@ -343,9 +343,6 @@ class RemoteManager:
 
 
 def uncompress_file(src_path, dest_folder, scope=None):
-    if sys.version_info.minor < 14 and src_path.endswith("zst"):
-        raise ConanException(f"File {os.path.basename(src_path)} compressed with 'zst', "
-                             f"unsupported for Python<3.14 ")
     try:
         filesize = os.path.getsize(src_path)
         big_file = filesize > 10000000  # 10 MB

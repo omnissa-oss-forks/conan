@@ -5,8 +5,12 @@ import platform
 import shutil
 import stat
 import sys
-import tarfile
 import time
+
+if sys.version_info >= (3, 14):
+    import tarfile
+else:
+    from backports.zstd import tarfile
 
 from contextlib import contextmanager
 
