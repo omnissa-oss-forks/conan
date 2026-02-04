@@ -51,7 +51,7 @@ def generate_wrapcc(conanfile, wrap_cc_filename, cc, cflags):
 
     # Generate wrapper with flags inlined
     wrap_cc = os.path.abspath(wrap_cc_filename)
-    save(wrap_cc, textwrap.dedent("""\
+    save(conanfile, wrap_cc, textwrap.dedent("""\
         #!/usr/bin/env bash
         exec %s %s "$@"
     """ % (cc, wrap_flags)))
