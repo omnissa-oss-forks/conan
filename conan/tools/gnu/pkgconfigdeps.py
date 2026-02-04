@@ -239,7 +239,7 @@ class _PCFilesDeps:
             # At first, let's check if we have defined some components requires, e.g., "dep::cmp1"
             # omnissa: support both requires and requires_private
             comp_requires = self._get_component_requirement_names(comp_cpp_info, private=False)
-            comp_requires_private = self._get_component_requirement_names(cpp_info, private=True)
+            comp_requires_private = self._get_component_requirement_names(comp_cpp_info, private=True)
             # omnissa: when using transitive libs, include requires_private in requires
             if self._transitive_libs:
                 comp_requires = comp_requires + comp_requires_private
