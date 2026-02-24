@@ -14,7 +14,6 @@ from conan.tools.microsoft import VCVars, msvc_runtime_flag, unix_path, check_mi
 from conan.tools.gnu.windres_wrapper import _generate_windres_wrapper
 from conan.internal.model.pkg_type import PackageType
 from conan.tools.env import VirtualBuildEnv
-from conan.tools.build.wrapcc import generate_wrapcc
 
 
 class AutotoolsToolchain:
@@ -88,8 +87,8 @@ class AutotoolsToolchain:
         self._is_cross_building = not self._is_universal_arch and cross_building(self._conanfile)
         self.cc_for_build = None
         self.cflags_for_build = []
-        self.cpp_for_build = None
-        self.cppflags_for_build = []
+        self.cxx_for_build = None
+        self.cxxflags_for_build = []
         self.ldflags_for_build = []
 
         if self._is_cross_building:
@@ -111,19 +110,9 @@ class AutotoolsToolchain:
             build_env = VirtualBuildEnv(self._conanfile, auto_generate=True).vars()
             self.cc_for_build = build_env.get("CC_FOR_BUILD")
             self.cflags_for_build = self._get_env_list(build_env.get("CFLAGS_FOR_BUILD", []))
-            if self.cc_for_build:
-                (wrap_cc_for_build, remaining_flags) = generate_wrapcc(conanfile, "wrap_cc_for_build", self.cc_for_build, self.cflags_for_build)
-                if wrap_cc_for_build:
-                    self.cc_for_build = wrap_cc_for_build
-                    self.cflags_for_build = remaining_flags
 
-            self.cpp_for_build = build_env.get("CPP_FOR_BUILD")
-            self.cppflags_for_build = self._get_env_list(build_env.get("CPPFLAGS_FOR_BUILD", []))
-            if self.cpp_for_build:
-                (wrap_cpp_for_build, remaining_flags) = generate_wrapcc(conanfile, "wrap_cpp_for_build", self.cpp_for_build, self.cppflags_for_build)
-                if wrap_cpp_for_build:
-                    self.cpp_for_build = wrap_cpp_for_build
-                    self.cppflags_for_build = remaining_flags
+            self.cxx_for_build = build_env.get("CXX_FOR_BUILD")
+            self.cxxflags_for_build = self._get_env_list(build_env.get("CXXFLAGS_FOR_BUILD", []))
 
             self.ldflags_for_build = self._get_env_list(build_env.get("LDFLAGS_FOR_BUILD", []))
 
@@ -366,9 +355,9 @@ class AutotoolsToolchain:
             env.define("CC_FOR_BUILD", self.cc_for_build)
             env.define("CFLAGS_FOR_BUILD", self.cflags_for_build)
 
-        if self.cpp_for_build:
-            env.define("CPP_FOR_BUILD", self.cpp_for_build)
-            env.define("CPPFLAGS_FOR_BUILD", self.cppflags_for_build)
+        if self.cxx_for_build:
+            env.define("CXX_FOR_BUILD", self.cxx_for_build)
+            env.define("CXXFLAGS_FOR_BUILD", self.cxxflags_for_build)
 
         if self.ldflags_for_build:
             env.define("LDFLAGS_FOR_BUILD", self.ldflags_for_build)
