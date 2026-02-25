@@ -72,7 +72,9 @@ class GraphAPI:
         profile_host.options.scope(tested_reference)
 
         # do not try apply lock_python_requires for test_package/conanfile.py consumer
-        conanfile = loader.load_consumer(path, user=tested_reference.user,
+        conanfile = loader.load_consumer(path,
+                                         name="test_package",
+                                         user=tested_reference.user,
                                          channel=tested_reference.channel,
                                          graph_lock=lockfile, remotes=remotes,
                                          tested_python_requires=tested_python_requires,
