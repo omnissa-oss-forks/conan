@@ -297,14 +297,24 @@ class MesonToolchain:
         # Read the VirtualBuildEnv to update the variables
         build_env = self._conanfile.buildenv_build.vars(self._conanfile) if native else (
             VirtualBuildEnv(self._conanfile, auto_generate=True).vars())
+
+        # If cross building and native then try use CC_FOR_BUILD from host env as a
+        # fallback if the build env does not have compilers
+        host_cc_for_build = None
+        host_cpp_for_build = None
+        if native:
+            host_build_env = VirtualBuildEnv(self._conanfile, auto_generate=True).vars()
+            host_cc_for_build = self._sanitize_env_format(host_build_env.get("CC_FOR_BUILD"))
+            host_cpp_for_build = self._sanitize_env_format(host_build_env.get("CXX_FOR_BUILD"))
+
         #: Sets the Meson ``c`` variable, defaulting to the ``CC`` build environment value.
         #: If provided as a blank-separated string, it will be transformed into a list.
         #: Otherwise, it remains a single string.
-        self.c = compilers_by_conf.get("c") or self._sanitize_env_format(build_env.get("CC")) or default_comp
+        self.c = compilers_by_conf.get("c") or self._sanitize_env_format(build_env.get("CC")) or host_cc_for_build or default_comp
         #: Sets the Meson ``cpp`` variable, defaulting to the ``CXX`` build environment value.
         #: If provided as a blank-separated string, it will be transformed into a list.
         #: Otherwise, it remains a single string.
-        self.cpp = compilers_by_conf.get("cpp") or self._sanitize_env_format(build_env.get("CXX")) or default_comp_cpp
+        self.cpp = compilers_by_conf.get("cpp") or self._sanitize_env_format(build_env.get("CXX")) or host_cpp_for_build or default_comp_cpp
         #: Sets the Meson ``ld`` variable, defaulting to the ``LD`` build environment value.
         #: If provided as a blank-separated string, it will be transformed into a list.
         #: Otherwise, it remains a single string.
