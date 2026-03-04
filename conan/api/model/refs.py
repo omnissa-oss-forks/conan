@@ -194,6 +194,9 @@ class RecipeReference:
               fnmatch.fnmatchcase(self.repr_notime(), p))
             for p in pattern.split('|')
         )
+        if '|' in pattern:
+            if self.repr_notime() == "*/*":
+                return False
         if no_user_channel:
             condition = condition and not self.user and not self.channel
         if negate:
