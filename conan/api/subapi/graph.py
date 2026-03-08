@@ -81,6 +81,7 @@ class GraphAPI:
         conanfile.display_name = "%s (test package)" % str(tested_reference)
         conanfile.output.scope = conanfile.display_name
         conanfile.tested_reference_str = repr(tested_reference)
+        conanfile.name = tested_reference.name
 
         ref = RecipeReference(conanfile.name, conanfile.version, tested_reference.user,
                               tested_reference.channel)
